@@ -6,7 +6,7 @@ import Data.Either
 import Data.Function
 import Data.List
 import Data.Maybe
-import Data.Yaml.Aeson (Yaml)
+import qualified Data.Yaml.Aeson as Yaml
 
 import System.Console.GetOpt
 import System.Directory
@@ -27,8 +27,8 @@ gitExecName :: String
 gitExecName = "git"
 
 main = do
-  [execName, args] <- getArgs
-  configData <- either (error . prettyPrintParseException) extractConfig <$>
+  args <- getArgs
+  configData <- either (error . Yaml.prettyPrintParseException) 
             Yaml.decodeFileEither gitmapYaml
 
   gitmapTime <- getModificationTime gitmapYaml
@@ -39,7 +39,7 @@ main = do
       stackTime <- getModificationTime stackYaml
       return gitmapTime > stackTime
     else return True
-  when updateStackYaml $ Yaml.encodeFile stackYaml $ gmcdStackYaml config
+  when updateStackYaml $ Yaml.encodeFile stackYaml $ gmcdStackYaml configData
 
   when (null args) exitSuccess
 
@@ -47,7 +47,7 @@ main = do
     die "Don't use 'gitmap clone'; missing repos are cloned automatically."
     
   let repoSpecs = sortBy (compare `on` gmrsName) $ gmcdRepoSpecs configData
-  results <- forM repoSpecs $ \ (GitHashMapRepoSpec repoName repoURL repoGitArgs) ->
+  results <- forM repoSpecs $ \ (GitMapRepoSpec repoName repoURL repoGitArgs) ->
     let fullGitArgs = args ++ repoGitArgs
         repoPrefix = repoName ++ ":"
         errorPrefix = repoPrefix ++ " errors occurred:\n"
@@ -60,7 +60,7 @@ main = do
         then return (ExitSuccess, "", "")
         else do
           (ex, ou, er) <- readProcessWithExitCode gitExecName ["clone", repoURL] ""
-          return (ex, clonePrefix ++ ou, clonePrefix ++ err)
+          return (ex, clonePrefix ++ ou, clonePrefix ++ er)
 
       when (exitFailed cloneExit) $ do
         lift $ putStrLn $ errorPrefix ++ cloneErr
