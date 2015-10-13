@@ -1,0 +1,7 @@
+module GitMapConfig where
+
+data GitMapConfig = GitMapConfig {
+  self :: Repository,
+  repositories :: [Repository],
+  buildConfig :: [BuildConfig]
+  }
