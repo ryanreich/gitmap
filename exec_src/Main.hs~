@@ -1,6 +1,0 @@
-import Data.Maybe
-import Data.Yaml
-
-main = do
-  config <- fromMaybe (error "Could not parse 'gitmap.yaml'") <$>
-            decodeFile "gitmap.yaml"

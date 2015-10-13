@@ -45,7 +45,7 @@ data GitMapConfig =
 data GitMapConfigGlobal =
   GitMapConfigGlobal
   {
-    gmcgPackages :: [Text],
+    gmcgPackages :: [Yaml.Value],
     gmcgExtraDeps :: [Text],
     gmcgFlags :: HashMap Text (HashMap Text Bool),
     gmcgOther :: Yaml.Object
@@ -71,28 +71,31 @@ instance Yaml.FromJSON GitMapConfigData where
   parseJSON yamlValue = do
     configFile <- Yaml.parseJSON yamlValue
     let repos = gmcRepos configFile
+        urls = map (Text.unpack . stackRepoGitURL) repos
+        names = map (last . splitOn "/" . Text.unpack . stackRepoGitURL) repos
     return $ GitMapConfigData {
-      gmcdRepoSpecs = flip map repos $ \repo ->
-       let as = stackRepoExtraGitArgs repo
-       in GitMapRepoSpec {
-         gmrsName = last $ splitOn "/" $ Text.unpack $ stackRepoGitURL repo,
-         gmrsURL = Text.unpack $ stackRepoGitURL repo,
-         gmrsGitArgs = (words $ Text.unpack $ simpleArgs as) ++
-                       (map Text.unpack $ complexArgs as)
-         },
+      gmcdRepoSpecs =
+         (\x y z f3 -> zipWith3 f3 x y z) repos urls names $ \repo url name ->
+         let as = stackRepoExtraGitArgs repo
+         in GitMapRepoSpec {
+           gmrsName = name,
+           gmrsURL = url,
+           gmrsGitArgs = (words $ Text.unpack $ simpleArgs as) ++
+                         (map Text.unpack $ complexArgs as)
+           },
       gmcdStackYaml =
-        let urls = map stackRepoGitURL repos
+        let tNames = map Text.pack names
         in combineStackYaml (gmcGlobal configFile) (
-          urls,
+          map Yaml.String tNames,
           nub $ concat $ map stackRepoExtraDeps repos,
           HashMap.filter (not . HashMap.null) $ HashMap.fromList $
-          zip urls (map stackRepoFlags repos)
+          zip tNames (map stackRepoFlags repos)
           )
       }
 
 
 combineStackYaml :: GitMapConfigGlobal ->
-                    ([Text], [Text], HashMap Text (HashMap Text Bool)) ->
+                    ([Yaml.Value], [Text], HashMap Text (HashMap Text Bool)) ->
                     Yaml.Object
 combineStackYaml GitMapConfigGlobal {
   gmcgPackages = gPackages,
@@ -100,7 +103,7 @@ combineStackYaml GitMapConfigGlobal {
   gmcgFlags = gFlags,
   gmcgOther = gOther
   } (packages, extraDeps, flags) =
-  HashMap.insert "packages" (makeYamlArray $ packages ++ gPackages)  $
+  HashMap.insert "packages" (Yaml.array $ packages ++ gPackages)  $
   HashMap.insert "extra-deps" (makeYamlArray $ extraDeps ++ gExtraDeps) $
   HashMap.insert "flags" (
     makeYamlObject (

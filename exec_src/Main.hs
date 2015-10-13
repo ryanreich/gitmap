@@ -17,6 +17,8 @@ import System.Process
 
 import GitMapConfig
 
+import Debug.Trace
+
 gitmapYaml :: String
 gitmapYaml = "gitmap.yaml"
 
@@ -28,8 +30,9 @@ gitExecName = "git"
 
 main = do
   args <- getArgs
-  configData <- either (error . Yaml.prettyPrintParseException) 
-            Yaml.decodeFileEither gitmapYaml
+  readConfigData <- Yaml.decodeFileEither gitmapYaml
+  let configData = either (error . Yaml.prettyPrintParseException) id readConfigData
+            
 
   gitmapTime <- getModificationTime gitmapYaml
   stackYamlExists <- doesFileExist stackYaml
@@ -37,47 +40,48 @@ main = do
     if stackYamlExists
     then do
       stackTime <- getModificationTime stackYaml
-      return gitmapTime > stackTime
+      return $ gitmapTime > stackTime
     else return True
   when updateStackYaml $ Yaml.encodeFile stackYaml $ gmcdStackYaml configData
 
   when (null args) exitSuccess
 
-  when (head args == "clone") $
-    die "Don't use 'gitmap clone'; missing repos are cloned automatically."
-    
   let repoSpecs = sortBy (compare `on` gmrsName) $ gmcdRepoSpecs configData
   results <- forM repoSpecs $ \ (GitMapRepoSpec repoName repoURL repoGitArgs) ->
     let fullGitArgs = args ++ repoGitArgs
         repoPrefix = repoName ++ ":"
-        errorPrefix = repoPrefix ++ " errors occurred:\n"
-        clonePrefix = "Running " ++ gitExecName ++ " clone " ++ repoURL ++ "...\n"
-        gitPrefix = "Running" ++ gitExecName ++ " " ++ fullGitArgs ++ "...\n"
-    in eitherT (const False) (const True) $ do
+        errorPrefix = repoPrefix ++ " errors occurred:"
+        clonePrefix = "Running `" ++ gitExecName ++ " clone " ++ repoURL ++ "`...\n"
+        gitPrefix = "Running `" ++ gitExecName ++ " " ++
+                    intercalate " " fullGitArgs ++ "`...\n"
+    in eitherT (return . (== 0)) (const $ return True) $ do
       repoExists <- lift $ doesDirectoryExist repoName
-      (cloneExit, cloneOut, cloneErr) <- lift $
-        if repoExists
-        then return (ExitSuccess, "", "")
-        else do
-          (ex, ou, er) <- readProcessWithExitCode gitExecName ["clone", repoURL] ""
-          return (ex, clonePrefix ++ ou, clonePrefix ++ er)
 
-      when (exitFailed cloneExit) $ do
-        lift $ putStrLn $ errorPrefix ++ cloneErr
-        left ()
+      when (not repoExists) $ do
+        (ex, ou, er) <-
+          lift $ readProcessWithExitCode gitExecName ["clone", repoURL] ""
+        let cloneOut = clonePrefix ++ ou ++ "\n"
+            cloneErr = clonePrefix ++ er ++ "\n"
+        when (exitFailed ex) $ do
+          lift $ putStr $ errorPrefix ++ "\n" ++ cloneErr
+          left 1
+        lift $ putStr $ repoPrefix ++ "\n" ++ cloneOut
 
-      let finalPrefix = cloneOut ++ "\n" ++ gitPrefix ++ "\n"
+      when (head fullGitArgs == "clone") $ left 0
 
-      (gitExit, gitOut,gitErr) <- readProcessWithExitCode gitExecName fullGitArgs ""
+      lift $ setCurrentDirectory repoName
+      (gitExit, gitOut,gitErr) <-
+        lift $ readProcessWithExitCode gitExecName fullGitArgs ""
+      lift $ setCurrentDirectory ".."
 
       when (exitFailed gitExit) $ do
-        lift $ putStrLn $ errorPrefix ++ finalPrefix ++ gitErr
-        left ()
+        lift $ putStrLn $ errorPrefix ++ "\n" ++ gitPrefix ++ gitErr
+        left 1
 
-      lift $ putStrLn $ repoPrefix ++ finalPrefix ++ gitOut
+      lift $ putStrLn $ repoPrefix ++ "\n" ++ gitPrefix ++ gitOut
     
-  when (not . and results) $
-    die "\nErrors occurred in some repositories. " ++
+  when (not $ and results) $
+    die $ "\nErrors occurred in some repositories. " ++
       "You may want to revert any successful changes."
 
 exitFailed :: ExitCode -> Bool
