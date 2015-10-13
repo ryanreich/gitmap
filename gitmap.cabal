@@ -27,6 +27,7 @@ executable gitmap
                        text >=1.2 && <1.3,
                        unordered-containers >=0.2 && <0.3,
                        vector >=0.10 && <0.11,
-                       split >=0.2 && <0.3
+                       split >=0.2 && <0.3,
+                       either
   hs-source-dirs:      src, exec_src
   default-language:    Haskell2010

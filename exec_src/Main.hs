@@ -1,4 +1,6 @@
 import Control.Monad
+import Control.Monad.Trans.Class
+import Control.Monad.Trans.Either
 
 import Data.Either
 import Data.Function
@@ -15,87 +17,69 @@ import System.Process
 
 import GitMapConfig
 
+gitmapYaml :: String
+gitmapYaml = "gitmap.yaml"
+
+stackYaml :: String
+stackYaml = "stack.yaml"
+
+gitExecName :: String
+gitExecName = "git"
+
 main = do
   [execName, args] <- getArgs
-  let (opts, actionM, nArgs) = makeOptions $ getOpts' RequireOrder options args
-  when (optShowHelp opts) $
-    putStrLn $ usageInfo (
-      "Usage: " ++ execName ++ ": " ++
-      execName ++ " [options] [<git-action> [git-options]]\n" ++
-      "where allowed options are:\n"
-      ) options
   configData <- either (error . prettyPrintParseException) extractConfig <$>
-            Yaml.decodeFileEither "gitmap.yaml"
-  when (optWriteStackYaml) $
-    Yaml.encodeFile "stack.yaml" $ gmcdStackYaml configData
-  when (isNothing actionM) $
-    exitWith ExitSuccess
+            Yaml.decodeFileEither gitmapYaml
+
+  gitmapTime <- getModificationTime gitmapYaml
+  stackYamlExists <- doesFileExist stackYaml
+  updateStackYaml <-
+    if stackYamlExists
+    then do
+      stackTime <- getModificationTime stackYaml
+      return gitmapTime > stackTime
+    else return True
+  when updateStackYaml $ Yaml.encodeFile stackYaml $ gmcdStackYaml config
+
+  when (null args) exitSuccess
+
+  when (head args == "clone") $
+    die "Don't use 'gitmap clone'; missing repos are cloned automatically."
     
-  let gitArgs = drop nArgs args
-      gitExecName = "git"
-      repoSpecs = sortBy (compare `on` gmrsName) $ gmcdRepoSpecs configData
-      (callBeforeExec, afterExec) =
-        if (actionM == "clone")
-        then (const mempty, mempty)
-        else (\x -> setCurrentDirectory x, setCurrentDirectory "..")
+  let repoSpecs = sortBy (compare `on` gmrsName) $ gmcdRepoSpecs configData
+  results <- forM repoSpecs $ \ (GitHashMapRepoSpec repoName repoURL repoGitArgs) ->
+    let fullGitArgs = args ++ repoGitArgs
+        repoPrefix = repoName ++ ":"
+        errorPrefix = repoPrefix ++ " errors occurred:\n"
+        clonePrefix = "Running " ++ gitExecName ++ " clone " ++ repoURL ++ "...\n"
+        gitPrefix = "Running" ++ gitExecName ++ " " ++ fullGitArgs ++ "...\n"
+    in eitherT (const False) (const True) $ do
+      repoExists <- lift $ doesDirectoryExist repoName
+      (cloneExit, cloneOut, cloneErr) <- lift $
+        if repoExists
+        then return (ExitSuccess, "", "")
+        else do
+          (ex, ou, er) <- readProcessWithExitCode gitExecName ["clone", repoURL] ""
+          return (ex, clonePrefix ++ ou, clonePrefix ++ err)
 
-  results <- tryGitMap gitExecName gitArgs
-             callBeforeExec afterExec repoSpecs
+      when (exitFailed cloneExit) $ do
+        lift $ putStrLn $ errorPrefix ++ cloneErr
+        left ()
 
-  map $ either
-    (\(name, err) -> hPutStrLn stderr name ++ ": error occurred\n" ++ err ++ "\n")
-    (\(name, out) -> putStrLn name ++ ":\n" ++ out ++ "\n")
-    results
-  hPutStrLn stderr
-    "Errors occurred in some repositories: \n" ++
-    "You may want to revert any successful changes."
+      let finalPrefix = cloneOut ++ "\n" ++ gitPrefix ++ "\n"
 
-  when (isLeft results) $
-    exitWith $ ExitFailure 1
+      (gitExit, gitOut,gitErr) <- readProcessWithExitCode gitExecName fullGitArgs ""
 
-data Options =
-  Options
-  {
-    optShowHelp :: Bool,
-    optWriteStackYaml :: Bool
-  }
+      when (exitFailed gitExit) $ do
+        lift $ putStrLn $ errorPrefix ++ finalPrefix ++ gitErr
+        left ()
 
-options :: [OptDescr (Options -> Options)]
-options = [
-  Option "h" ["help"] (NoArg \opts -> opts{optShowHelp = True})
-  "display usage",
-  Option "y" ["write-stack-yaml"] (NoArg \opts -> opts{optWriteStackYaml = True})
-  "write 'stack.yaml' based on 'gitmap.yaml'"
-  ]
+      lift $ putStrLn $ repoPrefix ++ finalPrefix ++ gitOut
+    
+  when (not . and results) $
+    die "\nErrors occurred in some repositories. " ++
+      "You may want to revert any successful changes."
 
-makeOptions :: ([Options -> Options], [String], [String], [String]) ->
-               (Options, Maybe String)
-makeOptions (optOps, others, [], []) =
-  (foldr ($) optOps (Options False False),
-   fmap fst $ uncons others,
-   length optOps)
-makeOptions (_, _, nonOps, []) = error $ nonOpsError nonOps
-makeOptions (_, _, [], errors) = error $ errorsError errors
-makeOptions (_, _, nonOps, errors) =
-  error $ nonOpsError nonOps ++ "\n" ++ errorsError errors
-
-nonOpsError :: [String] -> String
-nonOpsError nonOps =
-  "Unrecognized options:\n" ++ intercalate ", " nonOps ++ "\n"
-
-errorsError :: [String] -> String
-errorsError errors =
-  "Error(s) in processing options:\n" ++ intercalate "\n" errors ++ "\n"
-
-tryGitMap :: String -> [String] -> (String -> IO ()) -> IO () ->
-             [GitHashMapRepoSpec] -> IO ()
-tryGitMap gitExecName gitArgs callBeforeExec afterExec repoSpecs =
-  sequence $ forM repoSpecs $ \ (GitHashMapRepoSpec repoName repoGitArgs) ->
-    let fullGitArgs = gitArgs ++ repoGitArgs
-    in do
-      callBeforeExec repoName
-      (exitCode,gitOut,gitErr) <- readProcessWithExitCode gitExecName fullGitArgs ""
-      callAfterExec
-      case exitCode of
-        ExitSuccess -> return $ Right (repoName, gitOut)
-        _ -> return $ Left (repoName, gitErr)
+exitFailed :: ExitCode -> Bool
+exitFailed ExitSuccess = False
+exitFailed _ = True

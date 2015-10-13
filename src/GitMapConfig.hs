@@ -73,6 +73,7 @@ data GitHashMapRepoSpec =
   GitHashMapRepoSpec
   {
     gmrsName :: String,
+    gmrsURL :: String,
     gmrsGitArgs :: [String]
   }
 
@@ -80,7 +81,6 @@ data GitHashMapConfigData =
   GitHashMapConfigData
   {
     gmcdRepoSpecs :: [GitHashMapRepoSpec],
-    gmcdURLs :: [String],
     gmcdStackYaml :: Yaml.Value
   }
 
@@ -92,12 +92,12 @@ extractConfig config =
      GitHashMapRepoSpec
      {
        gmrsName = last $ splitOn "/" $ Text.unpack $ stackRepoGitURL repo,
+       gmcdURL = Text.unpack $ stackRepoGitURL repo
        gmrsGitArgs =
          let as = stackRepoExtraGitArgs repo
          in (words $ Text.unpack $ simpleArgs as) ++
             (map Text.unpack $ complexArgs as)
      },
-    gmcdURLs = map (unpack . stackRepoGitURL) (gmcRepos config),
     gmcdStackYaml =
       let repos = gmcRepos config
           urls = map stackGitRepoURL repos
