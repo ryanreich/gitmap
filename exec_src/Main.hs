@@ -30,10 +30,20 @@ gitExecName = "git"
 
 main = do
   args <- getArgs
+  let (opts, gitArgs) = processArgs args
+
+  when (optShowHelp opts || null args) $ do
+    execName <- getProgName
+    putStrLn $ usageInfo (
+      "Usage: " ++
+      execName ++ " [options] [<git-action> [git-options]]\n" ++
+      "where allowed options are:\n"
+      ) options
+    exitSuccess
+  
   readConfigData <- Yaml.decodeFileEither gitmapYaml
   let configData = either (error . Yaml.prettyPrintParseException) id readConfigData
             
-
   gitmapTime <- getModificationTime gitmapYaml
   stackYamlExists <- doesFileExist stackYaml
   updateStackYaml <-
@@ -42,13 +52,16 @@ main = do
       stackTime <- getModificationTime stackYaml
       return $ gitmapTime > stackTime
     else return True
-  when updateStackYaml $ Yaml.encodeFile stackYaml $ gmcdStackYaml configData
+         
+  when (updateStackYaml && optWriteStackYaml opts) $
+    Yaml.encodeFile stackYaml $ gmcdStackYaml configData
 
-  when (null args) exitSuccess
+  when (null gitArgs) exitSuccess
 
   let repoSpecs = sortBy (compare `on` gmrsName) $ gmcdRepoSpecs configData
   results <- forM repoSpecs $ \ (GitMapRepoSpec repoName repoURL repoGitArgs) ->
-    let fullGitArgs = args ++ repoGitArgs
+    let gitOp = head gitArgs
+        fullGitArgs = gitArgs ++ repoGitArgs
         repoPrefix = repoName ++ ":"
         errorPrefix = repoPrefix ++ " errors occurred:"
         clonePrefix = "Running `" ++ gitExecName ++ " clone " ++ repoURL ++ "`...\n"
@@ -67,18 +80,21 @@ main = do
           left 1
         lift $ putStr $ repoPrefix ++ "\n" ++ cloneOut
 
-      when (head fullGitArgs == "clone") $ left 0
+      when (gitOp == "clone") $ left 0
 
+      lastModTime <- lift $ getModificationTime repoName
       lift $ setCurrentDirectory repoName
       (gitExit, gitOut,gitErr) <-
         lift $ readProcessWithExitCode gitExecName fullGitArgs ""
       lift $ setCurrentDirectory ".."
+      currModTime <- lift $ getModificationTime repoName
 
       when (exitFailed gitExit) $ do
-        lift $ putStrLn $ errorPrefix ++ "\n" ++ gitPrefix ++ gitErr
+        lift $ putStrLn $ errorPrefix ++ "\n" ++ gitPrefix ++ gitOut ++ gitErr
         left 1
 
-      lift $ putStrLn $ repoPrefix ++ "\n" ++ gitPrefix ++ gitOut
+      when (currModTime > lastModTime || optShowOutput opts) $
+        lift $ putStrLn $ repoPrefix ++ "\n" ++ gitPrefix ++ gitOut ++ gitErr
     
   when (not $ and results) $
     die $ "\nErrors occurred in some repositories. " ++
@@ -87,3 +103,43 @@ main = do
 exitFailed :: ExitCode -> Bool
 exitFailed ExitSuccess = False
 exitFailed _ = True
+
+data Options =
+  Options
+  {
+    optShowHelp :: Bool,
+    optWriteStackYaml :: Bool,
+    optShowOutput :: Bool
+  }
+
+options :: [OptDescr (Options -> Options)]
+options = [
+  Option "h" ["help"] (NoArg $ \opts -> opts{optShowHelp = True})
+  "display usage",
+  Option "y" ["write-stack-yaml"] (NoArg $ \opts -> opts{optWriteStackYaml = True})
+  "write 'stack.yaml' based on 'gitmap.yaml'",
+  Option "s" ["show-output"] (NoArg $ \opts -> opts{optShowOutput = True})
+  "always show output, even if nothing changed"
+  ]
+
+processArgs :: [String] -> (Options, [String])
+processArgs args = (opts, drop nArgs args)
+  where (opts, nArgs) = makeOptions $ getOpt' RequireOrder options args
+
+makeOptions :: ([Options -> Options], [String], [String], [String]) ->
+               (Options, Int)
+makeOptions (optOps, others, [], []) =
+  (foldr (.) id optOps (Options False False False), length optOps)
+makeOptions (_, _, nonOps, []) = error $ nonOpsError nonOps
+makeOptions (_, _, [], errors) = error $ errorsError errors
+makeOptions (_, _, nonOps, errors) =
+  error $ nonOpsError nonOps ++ "\n" ++ errorsError errors
+
+nonOpsError :: [String] -> String
+nonOpsError nonOps =
+  "Unrecognized options:\n" ++ intercalate ", " nonOps ++ "\n"
+
+errorsError :: [String] -> String
+errorsError errors =
+  "Error(s) in processing options:\n" ++ intercalate "\n" errors ++ "\n"
+
