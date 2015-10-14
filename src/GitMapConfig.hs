@@ -17,6 +17,7 @@ import Control.Applicative
 import Control.Monad
 
 import qualified Data.Yaml.Aeson as Yaml
+import Data.Char
 import Data.List
 import Data.List.Split
 
@@ -32,7 +33,7 @@ data GitMapRepoSpec =
   {
     gmrsName :: String,
     gmrsURL :: String,
-    gmrsGitArgs :: [String]
+    gmrsGitArgs :: HashMap String [String]
   }
 
 data GitMapConfig =
@@ -54,8 +55,8 @@ data GitMapConfigGlobal =
 data GitMapRepository =
   StackGMR
   {
-    stackRepoGitURL :: Text,
-    stackRepoExtraGitArgs :: Args,
+    stackRepoGitURL :: String,
+    stackRepoExtraGitArgs :: HashMap String Args,
     stackRepoExtraDeps :: [Text],
     stackRepoFlags :: HashMap Text Bool
   }
@@ -63,36 +64,40 @@ data GitMapRepository =
 data Args =
   Args
   {
-    simpleArgs :: Text,
-    complexArgs :: [Text]
+    simpleArgs :: String,
+    complexArgs :: [String]
   }
 
 instance Yaml.FromJSON GitMapConfigData where
   parseJSON yamlValue = do
     configFile <- Yaml.parseJSON yamlValue
     let repos = gmcRepos configFile
-        urls = map (Text.unpack . stackRepoGitURL) repos
-        names = map (last . splitOn "/" . Text.unpack . stackRepoGitURL) repos
+        urls = map stackRepoGitURL repos
+        names = map (last . splitOn "/" . stackRepoGitURL) repos
     return $ GitMapConfigData {
       gmcdRepoSpecs =
          (\x y z f3 -> zipWith3 f3 x y z) repos urls names $ \repo url name ->
-         let as = stackRepoExtraGitArgs repo
+         let asM = stackRepoExtraGitArgs repo
          in GitMapRepoSpec {
            gmrsName = name,
            gmrsURL = url,
-           gmrsGitArgs = (words $ Text.unpack $ simpleArgs as) ++
-                         (map Text.unpack $ complexArgs as)
+           gmrsGitArgs =
+             flip HashMap.map asM $
+             \as ->
+             let sArgs = words $ simpleArgs as
+                 cArgs = concatMap ((\(x,y)->[x,y]) . break isSpace) $
+                         complexArgs as
+             in sArgs ++ cArgs
            },
       gmcdStackYaml =
         let tNames = map Text.pack names
         in combineStackYaml (gmcGlobal configFile) (
-          map Yaml.String tNames,
+          map Yaml.toJSON tNames,
           nub $ concat $ map stackRepoExtraDeps repos,
           HashMap.filter (not . HashMap.null) $ HashMap.fromList $
           zip tNames (map stackRepoFlags repos)
           )
       }
-
 
 combineStackYaml :: GitMapConfigGlobal ->
                     ([Yaml.Value], [Text], HashMap Text (HashMap Text Bool)) ->
@@ -103,17 +108,11 @@ combineStackYaml GitMapConfigGlobal {
   gmcgFlags = gFlags,
   gmcgOther = gOther
   } (packages, extraDeps, flags) =
-  HashMap.insert "packages" (Yaml.array $ packages ++ gPackages)  $
-  HashMap.insert "extra-deps" (makeYamlArray $ extraDeps ++ gExtraDeps) $
+  HashMap.insert "packages" (Yaml.toJSON $ packages ++ gPackages)  $
+  HashMap.insert "extra-deps" (Yaml.toJSON $ extraDeps ++ gExtraDeps) $
   HashMap.insert "flags" (
-    makeYamlObject (
-       HashMap.unionWith (HashMap.unionWith $ curry fst) flags gFlags
-       )
+    Yaml.toJSON $ HashMap.unionWith (HashMap.unionWith $ curry fst) flags gFlags
     ) gOther
-  where
-    makeYamlArray = Yaml.array . map Yaml.String
-    makeYamlObject = Yaml.Object . HashMap.map(Yaml.Object . HashMap.map Yaml.Bool)
-
       
 instance Yaml.FromJSON GitMapConfig where
   parseJSON (Yaml.Object hashMap) = do
@@ -141,7 +140,7 @@ instance Yaml.FromJSON GitMapConfigGlobal where
 instance Yaml.FromJSON GitMapRepository where
   parseJSON (Yaml.Object hashMap) = do
     srGU <- hashMap Yaml..: "git-url"
-    srEGA <- hashMap Yaml..:? "extra-git-args" Yaml..!= (Args "" [])
+    srEGA <- hashMap Yaml..:? "extra-git-args" Yaml..!= HashMap.empty
     srED <- hashMap Yaml..:? "extra-deps" Yaml..!= []
     srF <- hashMap Yaml..:? "flags" Yaml..!= HashMap.empty
     return $ StackGMR {

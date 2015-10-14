@@ -2,6 +2,7 @@ import Control.Monad
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Either
 
+import qualified Data.HashMap.Strict as HashMap
 import Data.Either
 import Data.Function
 import Data.List
@@ -15,9 +16,8 @@ import System.Exit
 import System.IO
 import System.Process
 
+import Color
 import GitMapConfig
-
-import Debug.Trace
 
 gitmapYaml :: String
 gitmapYaml = "gitmap.yaml"
@@ -61,24 +61,22 @@ main = do
   let repoSpecs = sortBy (compare `on` gmrsName) $ gmcdRepoSpecs configData
   results <- forM repoSpecs $ \ (GitMapRepoSpec repoName repoURL repoGitArgs) ->
     let gitOp = head gitArgs
-        fullGitArgs = gitArgs ++ repoGitArgs
+        fullGitArgs = gitArgs ++ HashMap.lookupDefault [] gitOp repoGitArgs
         repoPrefix = repoName ++ ":"
         errorPrefix = repoPrefix ++ " errors occurred:"
-        clonePrefix = "Running `" ++ gitExecName ++ " clone " ++ repoURL ++ "`...\n"
+        clonePrefix = "Running `" ++ gitExecName ++ " clone " ++ repoURL ++ "`..."
         gitPrefix = "Running `" ++ gitExecName ++ " " ++
-                    intercalate " " fullGitArgs ++ "`...\n"
+                    intercalate " " fullGitArgs ++ "`..."
     in eitherT (return . (== 0)) (const $ return True) $ do
       repoExists <- lift $ doesDirectoryExist repoName
 
       when (not repoExists) $ do
         (ex, ou, er) <-
           lift $ readProcessWithExitCode gitExecName ["clone", repoURL] ""
-        let cloneOut = clonePrefix ++ ou ++ "\n"
-            cloneErr = clonePrefix ++ er ++ "\n"
         when (exitFailed ex) $ do
-          lift $ putStr $ errorPrefix ++ "\n" ++ cloneErr
+          lift $ putError errorPrefix clonePrefix er
           left 1
-        lift $ putStr $ repoPrefix ++ "\n" ++ cloneOut
+        lift $ putSuccess repoPrefix clonePrefix ou
 
       when (gitOp == "clone") $ left 0
 
@@ -90,11 +88,11 @@ main = do
       currModTime <- lift $ getModificationTime repoName
 
       when (exitFailed gitExit) $ do
-        lift $ putStrLn $ errorPrefix ++ "\n" ++ gitPrefix ++ gitOut ++ gitErr
+        lift $ putError errorPrefix gitPrefix (gitOut ++ gitErr)
         left 1
 
       when (currModTime > lastModTime || optShowOutput opts) $
-        lift $ putStrLn $ repoPrefix ++ "\n" ++ gitPrefix ++ gitOut ++ gitErr
+        lift $ putSuccess repoPrefix gitPrefix (gitOut ++ gitErr)
     
   when (not $ and results) $
     die $ "\nErrors occurred in some repositories. " ++
@@ -142,4 +140,3 @@ nonOpsError nonOps =
 errorsError :: [String] -> String
 errorsError errors =
   "Error(s) in processing options:\n" ++ intercalate "\n" errors ++ "\n"
-
