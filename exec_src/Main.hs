@@ -64,8 +64,8 @@ main = do
         fullGitArgs = gitArgs ++ HashMap.lookupDefault [] gitOp repoGitArgs
         repoPrefix = repoName ++ ":"
         errorPrefix = repoPrefix ++ " errors occurred:"
-        clonePrefix = "Running `" ++ gitExecName ++ " clone " ++ repoURL ++ "`..."
-        gitPrefix = "Running `" ++ gitExecName ++ " " ++
+        clonePrefix = "Ran `" ++ gitExecName ++ " clone " ++ repoURL ++ "`..."
+        gitPrefix = "Ran `" ++ gitExecName ++ " " ++
                     intercalate " " fullGitArgs ++ "`..."
     in eitherT (return . (== 0)) (const $ return True) $ do
       repoExists <- lift $ doesDirectoryExist repoName
