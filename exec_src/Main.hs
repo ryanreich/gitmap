@@ -61,11 +61,15 @@ main = do
   let repoSpecs = sortBy (compare `on` gmrsName) $ gmcdRepoSpecs configData
   results <- forM repoSpecs $ \ (GitMapRepoSpec repoName repoURL repoGitArgs) ->
     let gitOp = head gitArgs
-        fullGitArgs = gitArgs ++ HashMap.lookupDefault [] gitOp repoGitArgs
-        cloneArgs = ["clone",repoURL] ++ HashMap.lookupDefault [] "clone" repoGitArgs
+        fullGitArgs = [gitOp] ++ HashMap.lookupDefault [] gitOp repoGitArgs ++
+                      tail gitArgs
+        cloneArgs = ["clone",repoURL] ++
+                    HashMap.lookupDefault [] "clone" repoGitArgs ++
+                    tail gitArgs
         repoPrefix = repoName ++ ":"
         errorPrefix = repoPrefix ++ " errors occurred:"
-        clonePrefix = "Ran `" ++ gitExecName ++ " clone " ++ repoURL ++ "`."
+        clonePrefix = "Ran `" ++ gitExecName ++ " " ++
+                      intercalate " " cloneArgs ++ "`."
         gitPrefix = "Ran `" ++ gitExecName ++ " " ++
                     intercalate " " fullGitArgs ++ "`."
     in eitherT (return . (== 0)) (const $ return True) $ do
