@@ -62,17 +62,18 @@ main = do
   results <- forM repoSpecs $ \ (GitMapRepoSpec repoName repoURL repoGitArgs) ->
     let gitOp = head gitArgs
         fullGitArgs = gitArgs ++ HashMap.lookupDefault [] gitOp repoGitArgs
+        cloneArgs = ["clone",repoURL] ++ HashMap.lookupDefault [] "clone" repoGitArgs
         repoPrefix = repoName ++ ":"
         errorPrefix = repoPrefix ++ " errors occurred:"
-        clonePrefix = "Ran `" ++ gitExecName ++ " clone " ++ repoURL ++ "`..."
+        clonePrefix = "Ran `" ++ gitExecName ++ " clone " ++ repoURL ++ "`."
         gitPrefix = "Ran `" ++ gitExecName ++ " " ++
-                    intercalate " " fullGitArgs ++ "`..."
+                    intercalate " " fullGitArgs ++ "`."
     in eitherT (return . (== 0)) (const $ return True) $ do
       repoExists <- lift $ doesDirectoryExist repoName
 
       when (not repoExists) $ do
         (ex, ou, er) <-
-          lift $ readProcessWithExitCode gitExecName ["clone", repoURL] ""
+          lift $ readProcessWithExitCode gitExecName cloneArgs ""
         when (exitFailed ex) $ do
           lift $ putError errorPrefix clonePrefix er
           left 1
