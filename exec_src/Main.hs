@@ -55,31 +55,31 @@ main = do
       repoSpecs = sortBy (compare `on` gmrsName) $ gmcdRepoSpecs configData
 
   mResults <- sequence $ map (const newEmptyMVar) repoSpecs
-  sequence_ $ map forkIO $ zipWith handleRepo repoSpecs mResults
+  sequence_ $ map forkIO $
+    zipWith (handleRepo gitOp gitOpArgs opts) repoSpecs mResults
   results <- sequence $ map takeMVar mResults
   
   when (not $ and results) $
     die $ "\nErrors occurred in some repositories. " ++
       "You may want to revert any successful changes."
 
-handleRepo :: GitMapRepoSpec -> MVar Bool -> IO ()
-handleRepo repoSpec status = do
+handleRepo :: String -> [String] -> Options ->
+              GitMapRepoSpec -> MVar Bool -> IO ()
+handleRepo gitOp gitOpArgs opts repoSpec status = do
   let repoName = gmrsName repoSpec
   runResult <- runExceptT $ handleGitOp gitOp gitOpArgs repoSpec
-  whenQuitFailPass runResult
-    (putMVar status True)
+  putMVar status =<< whenQuitFailPass runResult
+    (return True)
     (\(runCmd, runOutput) -> do
-        printResult (putColored errorColor "failed")
-          repoName runCmd runOutput
-        putMVar status False)
+        printResult (putColored errorColor "failed") repoName runCmd runOutput
+        return False)
     (\(runCmd, runOutput) -> do
         when (optShowOutput opts) $
-          printResult (putColored successColor "success")
-          repoName runCmd runOutput
-        putMVar status True)
+          printResult (putColored successColor "success") repoName runCmd runOutput
+        return True)
 
 printResult :: IO () -> String -> String -> String -> IO ()
-printResult showMessage repoName runCmd runOutput status = do
+printResult showMessage repoName runCmd runOutput = do
   putColored' infoColor $ repoName ++ ": "
   showMessage
   when (not . null $ runCmd) $ putColored commandColor $ "Ran " ++ runCmd
