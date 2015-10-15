@@ -51,8 +51,6 @@ handleGitOp gitOp gitArgs repoSpec = do
   currModTime <- liftIO $ getModificationTime "."
   (_, postOutput) <- postGitOp gitOp repoName repoSpec
 
-  when (currModTime == lastModTime) quit
-
   return (gitCmd, preOutput ++ gitOutput ++ postOutput)
 
 preGitOp :: String -> String -> GitMapRepoSpec -> ProcResult
