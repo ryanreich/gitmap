@@ -37,16 +37,7 @@ main = do
   readConfigData <- Yaml.decodeFileEither gitmapYaml
   let configData = either (error . Yaml.prettyPrintParseException) id readConfigData
             
-  gitmapTime <- getModificationTime gitmapYaml
-  stackYamlExists <- doesFileExist stackYaml
-  updateStackYaml <-
-    if stackYamlExists
-    then do
-      stackTime <- getModificationTime stackYaml
-      return $ gitmapTime > stackTime
-    else return True
-         
-  when (updateStackYaml && optWriteStackYaml opts) $
+  when (optWriteStackYaml opts) $
     Yaml.encodeFile stackYaml $ gmcdStackYaml configData
 
   when (null gitArgs) exitSuccess
@@ -82,5 +73,5 @@ printResult :: IO () -> String -> String -> String -> IO ()
 printResult showMessage repoName runCmd runOutput = do
   putColored' infoColor $ repoName ++ ": "
   showMessage
-  when (not . null $ runCmd) $ putColored commandColor $ "Ran " ++ runCmd
+  when (not . null $ runCmd) $ putColored commandColor $ "Ran `" ++ runCmd ++ "`"
   putStrLn runOutput
