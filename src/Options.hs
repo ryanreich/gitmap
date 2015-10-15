@@ -1,6 +1,16 @@
 module Options (
-  processArgs, options, Options(..)
+  processArgs, usage, Options(..)
   ) where
+
+import Data.List
+import System.Console.GetOpt
+
+usage :: String -> String
+usage execName = usageInfo (
+  "Usage: " ++
+  execName ++ " [options] [<git-action> [git-options]]\n" ++
+  "where allowed options are:\n"
+  ) options
 
 data Options =
   Options

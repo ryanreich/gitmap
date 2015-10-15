@@ -1,5 +1,5 @@
 module Color (
-  putColored, successColor, errorColor, commandColor
+  putColored, putColored', successColor, errorColor, infoColor, commandColor
   ) where
 
 import System.Console.ANSI
@@ -7,20 +7,16 @@ import System.Console.ANSI
 resetColor :: IO ()
 resetColor = setSGR [Reset]
 
-successColor :: IO ()
-successColor = setSGR [SetColor Foreground Vivid Cyan]
+successColor = Cyan
+errorColor = Red
+infoColor = Yellow
+commandColor = Magenta
 
-errorColor :: IO ()
-errorColor = setSGR [SetColor Foreground Vivid Red]
-
-infoColor :: IO ()
-infoColor = setSGR [SetColor Foreground Vivid Yellow]
-
-putColored :: IO () -> String -> IO ()
-putColored_ op color text = 
-  color
+putColored_ :: (String -> IO ()) -> Color -> String -> IO ()
+putColored_ op color text = do
+  setSGR [SetColor Foreground Vivid color]
   op text
   resetColor
 
 putColored = putColored_ putStrLn
-putColored' = putColored putStr
+putColored' = putColored_ putStr

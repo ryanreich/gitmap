@@ -1,4 +1,5 @@
 import Control.Monad
+import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 
@@ -27,11 +28,7 @@ main = do
 
   when (optShowHelp opts || null args) $ do
     execName <- getProgName
-    putStrLn $ usageInfo (
-      "Usage: " ++
-      execName ++ " [options] [<git-action> [git-options]]\n" ++
-      "where allowed options are:\n"
-      ) options
+    putStrLn $ usage execName
     exitSuccess
   
   readConfigData <- Yaml.decodeFileEither gitmapYaml
@@ -54,27 +51,28 @@ main = do
   let Just (gitOp, gitOpArgs) = uncons gitArgs
       repoSpecs = sortBy (compare `on` gmrsName) $ gmcdRepoSpecs configData
 
-  results <- forM repoSpecs $ \repoSpec -> 
-    whenQuitFailPass
-      (do
-          lastModTime <- liftIO $ getModificationTime repoName    
-          (gitCmd, gitOutput) <- handleGitOp gitOp gitOpArgs repoSpec
-          currModTime <- liftIO $ getModificationTime repoName
-
-          when (currModTime > lastModTime || optShowOutput opts) $ do
-            let repoName = gmrsName repoSpec
-            liftIO $ putColored' infoColor $ repoName ++ ": "
-            return (gitCmd, gitOutput))
+  results <- forM repoSpecs $ \repoSpec -> do
+    let repoName = gmrsName repoSpec
+    runResult <- runExceptT $ handleGitOp gitOp gitOpArgs repoSpec
+    whenQuitFailPass runResult
       (return True)
       (\(runCmd, runOutput) -> do
+          putColored' infoColor $ repoName ++ ": "
           putColored errorColor "failed"
+          when (not . null $ runCmd) $ putColored commandColor $ "Ran " ++ runCmd
           putStrLn runOutput
           return False)
       (\(runCmd, runOutput) -> do
-          putColored successColor "success"
-          putStrLn runOutput
+          when (not (null runCmd) && optShowOutput opts) $ do
+            putColored' infoColor $ repoName ++ ": "
+            putColored successColor "success"
+            putColored commandColor $ "Ran " ++ runCmd
+            putStrLn runOutput
           return True)
     
   when (not $ and results) $
     die $ "\nErrors occurred in some repositories. " ++
       "You may want to revert any successful changes."
+
+
+
