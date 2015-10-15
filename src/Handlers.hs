@@ -3,11 +3,9 @@ module Handlers (
   ) where
 
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 
 import qualified Data.HashMap.Strict as HashMap
-import Data.List
 
 import System.Directory
 import System.Exit
@@ -101,7 +99,7 @@ gitRun args stdIn = do
   (exitCode, out, err) <-
     liftIO $ readProcessWithExitCode gitExecName args stdIn
   let output = out ++ err
-      gitCmd = gitExecName ++ " " ++ intercalate " " args
+      gitCmd = showCommandForUser gitExecName args
   when (exitFailed exitCode) $ throwE $ Just (gitCmd, output)
   return (gitCmd, output)
 

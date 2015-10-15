@@ -1,5 +1,6 @@
 module Color (
-  putColored, putColored', successColor, errorColor, infoColor, commandColor
+  putColored, putColored',
+  successColor, errorColor, infoColor, commandColor
   ) where
 
 import System.Console.ANSI

@@ -1,3 +1,6 @@
+import Control.Concurrent
+import Control.Concurrent.MVar
+
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
@@ -51,28 +54,33 @@ main = do
   let Just (gitOp, gitOpArgs) = uncons gitArgs
       repoSpecs = sortBy (compare `on` gmrsName) $ gmcdRepoSpecs configData
 
-  results <- forM repoSpecs $ \repoSpec -> do
-    let repoName = gmrsName repoSpec
-    runResult <- runExceptT $ handleGitOp gitOp gitOpArgs repoSpec
-    whenQuitFailPass runResult
-      (return True)
-      (\(runCmd, runOutput) -> do
-          putColored' infoColor $ repoName ++ ": "
-          putColored errorColor "failed"
-          when (not . null $ runCmd) $ putColored commandColor $ "Ran " ++ runCmd
-          putStrLn runOutput
-          return False)
-      (\(runCmd, runOutput) -> do
-          when (not (null runCmd) && optShowOutput opts) $ do
-            putColored' infoColor $ repoName ++ ": "
-            putColored successColor "success"
-            putColored commandColor $ "Ran " ++ runCmd
-            putStrLn runOutput
-          return True)
-    
+  mResults <- sequence $ map (const newEmptyMVar) repoSpecs
+  sequence_ $ map forkIO $ zipWith handleRepo repoSpecs mResults
+  results <- sequence $ map takeMVar mResults
+  
   when (not $ and results) $
     die $ "\nErrors occurred in some repositories. " ++
       "You may want to revert any successful changes."
 
+handleRepo :: GitMapRepoSpec -> MVar Bool -> IO ()
+handleRepo repoSpec status = do
+  let repoName = gmrsName repoSpec
+  runResult <- runExceptT $ handleGitOp gitOp gitOpArgs repoSpec
+  whenQuitFailPass runResult
+    (putMVar status True)
+    (\(runCmd, runOutput) -> do
+        printResult (putColored errorColor "failed")
+          repoName runCmd runOutput
+        putMVar status False)
+    (\(runCmd, runOutput) -> do
+        when (optShowOutput opts) $
+          printResult (putColored successColor "success")
+          repoName runCmd runOutput
+        putMVar status True)
 
-
+printResult :: IO () -> String -> String -> String -> IO ()
+printResult showMessage repoName runCmd runOutput status = do
+  putColored' infoColor $ repoName ++ ": "
+  showMessage
+  when (not . null $ runCmd) $ putColored commandColor $ "Ran " ++ runCmd
+  putStrLn runOutput
