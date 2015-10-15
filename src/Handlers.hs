@@ -44,11 +44,7 @@ handleGitOp gitOp gitArgs repoSpec = do
   let repoName = gmrsName repoSpec
 
   (_, preOutput) <- preGitOp gitOp repoName repoSpec
-  lastModTime <- liftIO $ getModificationTime "."
-
   (gitCmd, gitOutput) <- basicGitRun repoName gitOp gitArgs repoSpec
-  
-  currModTime <- liftIO $ getModificationTime "."
   (_, postOutput) <- postGitOp gitOp repoName repoSpec
 
   return (gitCmd, preOutput ++ gitOutput ++ postOutput)
