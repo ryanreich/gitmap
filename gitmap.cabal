@@ -18,7 +18,10 @@ cabal-version:       >=1.10
 
 executable gitmap
   main-is:             Main.hs
-  -- other-modules:       
+  ghc-options:         -O2
+                       -Wall
+                       -fno-warn-unused-do-bind
+                       -fno-warn-missing-signatures
   other-extensions:    TemplateHaskell
   build-depends:       base >=4.8 && <4.9,
                        yaml >=0.8 && <0.9,

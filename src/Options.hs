@@ -36,7 +36,7 @@ processArgs args = (opts, drop nArgs args)
 
 makeOptions :: ([Options -> Options], [String], [String], [String]) ->
                (Options, Int)
-makeOptions (optOps, others, [], []) =
+makeOptions (optOps, _, [], []) =
   (foldr (.) id optOps (Options False False False), length optOps)
 makeOptions (_, _, nonOps, []) = error $ nonOpsError nonOps
 makeOptions (_, _, [], errors) = error $ errorsError errors

@@ -1,23 +1,14 @@
 import Control.Concurrent
-import Control.Concurrent.MVar
 
 import Control.Monad
-import Control.Monad.IO.Class
-import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 
-import qualified Data.HashMap.Strict as HashMap
-import Data.Either
 import Data.Function
 import Data.List
-import Data.Maybe
 import qualified Data.Yaml.Aeson as Yaml
 
-import System.Directory
 import System.Environment
 import System.Exit
-import System.IO
-import System.Process
 
 import Color
 import FileNames

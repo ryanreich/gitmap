@@ -9,7 +9,6 @@ import qualified Data.HashMap.Strict as HashMap
 
 import System.Directory
 import System.Exit
-import System.IO.Error
 import System.Process
 
 import FileNames

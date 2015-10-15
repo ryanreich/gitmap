@@ -11,10 +11,7 @@ import Data.Text (Text)
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
 
-import qualified Data.Vector as Vector ((++))
-
 import Control.Applicative
-import Control.Monad
 
 import qualified Data.Yaml.Aeson as Yaml
 import Data.Char
@@ -136,6 +133,7 @@ instance Yaml.FromJSON GitMapConfigGlobal where
       gmcgFlags = gmcgF,
       gmcgOther = gmcgO
       }
+  parseJSON _ = empty
 
 instance Yaml.FromJSON GitMapRepository where
   parseJSON (Yaml.Object hashMap) = do
