@@ -33,7 +33,7 @@ main = do
     Yaml.encodeFile stackYaml $ gmcdStackYaml configData
 
   when (optWipe opts) $
-    callProcess gitExecName ["-d", "-ff", "-e", "stack.yaml"]
+    callProcess gitExecName ["clean", "-d", "-ff", "-e", "stack.yaml"]
 
   when (null gitArgs) exitSuccess
 

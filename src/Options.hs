@@ -18,7 +18,7 @@ data Options =
     optShowHelp :: Bool,
     optWriteStackYaml :: Bool,
     optShowOutput :: Bool,
-    optWipe :: Bool,
+    optWipe :: Bool
   }
 
 options :: [OptDescr (Options -> Options)]
@@ -28,7 +28,7 @@ options = [
   Option "y" ["write-stack-yaml"] (NoArg $ \opts -> opts{optWriteStackYaml = True})
   "write 'stack.yaml' based on 'gitmap.yaml'",
   Option "s" ["show-output"] (NoArg $ \opts -> opts{optShowOutput = True})
-  "always show output, even if nothing changed"
+  "always show output, even if nothing changed",
   Option "w" ["wipe"] (NoArg $ \opts -> opts{optWipe = True})
   "remove all repositories from the directory (git clean -d -ff)"
   ]
@@ -40,7 +40,7 @@ processArgs args = (opts, drop nArgs args)
 makeOptions :: ([Options -> Options], [String], [String], [String]) ->
                (Options, Int)
 makeOptions (optOps, _, [], []) =
-  (foldr (.) id optOps (Options False False False), length optOps)
+  (foldr (.) id optOps (Options False False False False), length optOps)
 makeOptions (_, _, nonOps, []) = error $ nonOpsError nonOps
 makeOptions (_, _, [], errors) = error $ errorsError errors
 makeOptions (_, _, nonOps, errors) =
