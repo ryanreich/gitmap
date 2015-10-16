@@ -17,7 +17,8 @@ data Options =
   {
     optShowHelp :: Bool,
     optWriteStackYaml :: Bool,
-    optShowOutput :: Bool
+    optShowOutput :: Bool,
+    optWipe :: Bool,
   }
 
 options :: [OptDescr (Options -> Options)]
@@ -28,6 +29,8 @@ options = [
   "write 'stack.yaml' based on 'gitmap.yaml'",
   Option "s" ["show-output"] (NoArg $ \opts -> opts{optShowOutput = True})
   "always show output, even if nothing changed"
+  Option "w" ["wipe"] (NoArg $ \opts -> opts{optWipe = True})
+  "remove all repositories from the directory (git clean -d -ff)"
   ]
 
 processArgs :: [String] -> (Options, [String])

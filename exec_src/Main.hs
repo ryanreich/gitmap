@@ -9,6 +9,7 @@ import qualified Data.Yaml.Aeson as Yaml
 
 import System.Environment
 import System.Exit
+import System.Process
 
 import Color
 import FileNames
@@ -30,6 +31,9 @@ main = do
             
   when (optWriteStackYaml opts) $
     Yaml.encodeFile stackYaml $ gmcdStackYaml configData
+
+  when (optWipe opts) $
+    callProcess gitExecName ["-d", "-ff", "-e", "stack.yaml"]
 
   when (null gitArgs) exitSuccess
 
