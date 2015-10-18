@@ -2,11 +2,16 @@ module Output (handleReport, printRemaining) where
 
 import Control.Monad
 import Data.Char
+import Data.List
 import System.Console.ANSI
+import System.Exit
 
-handleReport :: Bool -> IO (Bool, GitMapRepoSpec, String, String) -> [String] -> IO ()
+import GitMapConfig
+
+handleReport :: Bool -> IO (Bool, GitMapRepoSpec, String, String) ->
+                [GitMapRepoSpec] -> IO ()
 handleReport status reportV repos = do
-  (success, repoSpec, gitCmd, output) <- takeMVar reportV
+  (success, repoSpec, gitCmd, output) <- reportV
   let reposLeft = delete repoSpec repos
       repoNamesLeft = map gmrsName reposLeft
       newStatus = status && success
@@ -19,11 +24,11 @@ handleReport status reportV repos = do
          
 printOutput :: Bool -> String -> String -> String -> [String] -> IO ()
 printOutput success repoName gitCmd output reposLeft = do
-  cursorUpLine $ 1 + length reposLeft
+  cursorUpLine $ 2 + length reposLeft --one removed, plus header
   setCursorColumn 0
   clearFromCursorToScreenEnd
 
-  when (not . null gitCmd) $ do
+  when (not $ null gitCmd) $ do
     setColor infoColor
     putStr $ repoName ++ ": "
     let (color, message) =
@@ -31,7 +36,7 @@ printOutput success repoName gitCmd output reposLeft = do
           then (successColor, "success")
           else (errorColor, "failed")
     setColor color
-    putStrLn messsage
+    putStrLn message
 
     setColor commandColor
     putStrLn $ "Ran `" ++ gitCmd ++ "`:"
@@ -41,7 +46,7 @@ printOutput success repoName gitCmd output reposLeft = do
 
     putStrLn ""
 
-  when (not . null reposLeft) $ printRemaining reposLeft
+  when (not $ null reposLeft) $ printRemaining reposLeft
 
 printRemaining :: [String] -> IO ()
 printRemaining reposLeft = do

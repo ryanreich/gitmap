@@ -18,7 +18,6 @@ handleRepo :: String -> [String] -> Bool ->
               ((Bool, GitMapRepoSpec, String, String) -> IO ()) ->
               GitMapRepoSpec -> IO ()
 handleRepo gitOp gitOpArgs keepResult report repoSpec = do
-  let repoName = gmrsName repoSpec
   runResult <- runExceptT $ do
     result <- handleGitOp gitOp gitOpArgs repoSpec
     when (not keepResult) quit

@@ -32,6 +32,7 @@ data GitMapRepoSpec =
     gmrsURL :: String,
     gmrsGitArgs :: HashMap String [String]
   }
+  deriving (Eq)
 
 data GitMapConfig =
   GitMapConfig
