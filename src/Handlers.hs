@@ -1,6 +1,6 @@
-module Handlers (
-  handleGitOp, whenQuitFailPass
-  ) where
+{-# LANGUAGE TupleSections #-}
+
+module Handlers (handleRepo) where
 
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Except
@@ -13,6 +13,20 @@ import System.Process
 
 import FileNames
 import GitMapConfig
+
+handleRepo :: String -> [String] -> Bool ->
+              ((Bool, GitMapRepoSpec, String, String) -> IO ()) ->
+              GitMapRepoSpec -> IO ()
+handleRepo gitOp gitOpArgs keepResult report repoSpec = do
+  let repoName = gmrsName repoSpec
+  runResult <- runExceptT $ do
+    result <- handleGitOp gitOp gitOpArgs repoSpec
+    when (not keepResult) quit
+    return result
+  report $ whenQuitFailPass runResult
+    (True, repoSpec, "", "")
+    (uncurry (False, repoSpec, ,))
+    (uncurry (True,  repoSpec, ,))
 
 handleGitOp :: String -> [String] -> GitMapRepoSpec -> ProcResult
 handleGitOp gitOp gitArgs repoSpec = do
