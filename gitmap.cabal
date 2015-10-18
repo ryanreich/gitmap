@@ -18,21 +18,25 @@ cabal-version:       >=1.10
 
 executable gitmap
   main-is:             Main.hs
+  other-modules:       FileNames,
+                       GitMapConfig,
+                       Handlers,
+                       Options,
+                       Output
   ghc-options:         -O2
                        -Wall
                        -fno-warn-unused-do-bind
                        -fno-warn-missing-signatures
-  other-extensions:    TemplateHaskell
-  build-depends:       base >=4.8 && <4.9,
-                       yaml >=0.8 && <0.9,
-                       directory >=1.2 && <1.3,
-                       process >=1.2 && <1.3,
-                       text >=1.2 && <1.3,
-                       unordered-containers >=0.2 && <0.3,
-                       vector >=0.10 && <0.11,
-                       split >=0.2 && <0.3,
+  build-depends:       ansi-terminal,
+                       base,
+                       directory,
                        either,
+                       process,
+                       split,
+                       text,
                        transformers,
-                       ansi-terminal
+                       unordered-containers,
+                       vector,
+                       yaml
   hs-source-dirs:      src, exec_src
   default-language:    Haskell2010

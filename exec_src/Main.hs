@@ -42,5 +42,5 @@ main = do
   
   report <- newEmptyMVar
   mapM_ forkIO $
-    map (handleRepo gitOp gitOpArgs (optShowOutput opts) (putMVar report)) repoSpecs
+    map (handleRepo gitOp gitOpArgs (optQuiet opts) (putMVar report)) repoSpecs
   handleReport True (takeMVar report) repoSpecs
