@@ -20,7 +20,7 @@ handleReport status quiet reportV repos = do
     then when (not newStatus) $
          die $ "Errors occurred in some repositories. " ++
          "You may want to revert any successful changes."
-    else handleReport newStatus reportV reposLeft
+    else handleReport newStatus quiet reportV reposLeft
          
 printOutput :: Bool -> Bool -> String -> String -> String -> [String] -> IO ()
 printOutput quiet success repoName gitCmd output reposLeft = do

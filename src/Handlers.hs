@@ -14,7 +14,7 @@ import System.Process
 import FileNames
 import GitMapConfig
 
-handleRepo :: String -> [String] -> Bool ->
+handleRepo :: String -> [String] ->
               ((Bool, GitMapRepoSpec, String, String) -> IO ()) ->
               GitMapRepoSpec -> IO ()
 handleRepo gitOp gitOpArgs report repoSpec = do
