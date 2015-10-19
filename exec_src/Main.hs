@@ -37,10 +37,11 @@ main = do
 
   let Just (gitOp, gitOpArgs) = uncons gitArgs
       repoSpecs = sortBy (compare `on` gmrsName) $ gmcdRepoSpecs configData
+      quiet = optQuiet opts
 
-  printRemaining $ map gmrsName repoSpecs
+  when (not quiet) $ printRemaining $ map gmrsName repoSpecs
   
   report <- newEmptyMVar
   mapM_ forkIO $
-    map (handleRepo gitOp gitOpArgs (optQuiet opts) (putMVar report)) repoSpecs
-  handleReport True (takeMVar report) repoSpecs
+    map (handleRepo gitOp gitOpArgs (putMVar report)) repoSpecs
+  handleReport True quiet (takeMVar report) repoSpecs

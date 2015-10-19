@@ -17,11 +17,8 @@ import GitMapConfig
 handleRepo :: String -> [String] -> Bool ->
               ((Bool, GitMapRepoSpec, String, String) -> IO ()) ->
               GitMapRepoSpec -> IO ()
-handleRepo gitOp gitOpArgs quiet report repoSpec = do
-  runResult <- runExceptT $ do
-    result <- handleGitOp gitOp gitOpArgs repoSpec
-    when (quiet) quit
-    return result
+handleRepo gitOp gitOpArgs report repoSpec = do
+  runResult <- runExceptT $ handleGitOp gitOp gitOpArgs repoSpec
   report $ whenQuitFailPass runResult
     (True, repoSpec, "", "")
     (uncurry (False, repoSpec, ,))
